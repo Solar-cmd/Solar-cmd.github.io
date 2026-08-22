@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>aspen@bio</title>
+<style>
+  :root{
+    --bg:#181616; --surface:#1e1b1b; --fg:#d4be98; --text2:#bdae8b; --text3:#928374;
+    --red:#b53535; --grn:#b4c76e; --yel:#e7bb5c; --blu:#7b8fd4; --pur:#b06880; --aqu:#689d8a; --wht:#c2c2c2; --org:#c87941;
+    --grn-b:#cad98a; --yel-b:#f0cc7a; --blu-b:#9aaae0; --red-b:#c94040; --aqu-b:#89b8a8;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font-family:'JetBrains Mono', monospace; font-size:14px;
+    display:flex; justify-content:center; align-items:flex-start;
+    padding:40px 16px;
+  }
+  @media (max-width:600px){ body{ padding:14px 8px; } }
+
+  .term{
+    width:100%; max-width:780px; background:var(--surface);
+    border:1px solid #2a2626; border-radius:6px; overflow:hidden;
+    display:flex; flex-direction:column; position:relative;
+  }
+  .term::after{
+    content:''; position:absolute; inset:0; pointer-events:none;
+    background:repeating-linear-gradient(to bottom, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+    opacity:.5;
+  }
+  @media (prefers-reduced-motion: reduce){ .term::after{ display:none; } }
+
+  .titlebar{
+    display:flex; align-items:center; gap:6px;
+    padding:8px 12px; background:#151313; border-bottom:1px solid #2a2626;
+  }
+  .dot{
+    width:10px;height:10px;border-radius:50%;background:#3a3535; flex-shrink:0;
+    border:none; padding:0; cursor:pointer; transition:background-color .12s, transform .12s;
+  }
+  .dot:hover, .dot:focus-visible{ transform:scale(1.15); outline:none; }
+  .dot:active{ transform:scale(0.85); }
+  .dot-close:hover, .dot-close:focus-visible{ background:var(--red); }
+  .dot-min:hover, .dot-min:focus-visible{ background:var(--yel); }
+  .dot-max:hover, .dot-max:focus-visible{ background:var(--grn); }
+  .dot:focus-visible{ box-shadow:0 0 0 2px var(--yel); }
+
+  .term-body{
+    display:flex; flex-direction:column; overflow:hidden;
+    max-height:900px; opacity:1; transition:max-height .22s ease, opacity .18s ease;
+  }
+  .term.collapsed .term-body{ max-height:0; opacity:0; }
+  .term.maxed{ max-width:1100px; }
+  .term.maxed .screen{ height:600px; }
+  .term{ transition:max-width .22s ease; }
+  .screen{ transition:height .22s ease; }
+  .titlebar span{margin-left:8px; color:var(--text3); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+  .quickbar{
+    display:flex; flex-wrap:wrap; gap:6px;
+    padding:10px 14px; border-bottom:1px solid #2a2626; background:#1a1717;
+  }
+  .qbtn{
+    background:transparent; border:1px solid #2a2626; color:var(--text2);
+    font-family:inherit; font-size:12px; padding:4px 10px; border-radius:3px;
+    cursor:pointer; transition:border-color .1s, color .1s, transform .08s, background-color .08s;
+  }
+  .qbtn:hover, .qbtn:focus-visible{ border-color:var(--yel); color:var(--yel-b); outline:none; transform:translateY(-1px); }
+  .qbtn:active{ transform:translateY(1px) scale(0.95); background:#201c1c; }
+
+  .clickable{
+    cursor:pointer; border-bottom:1px dotted transparent;
+    transition:border-color .1s, color .1s, opacity .08s;
+  }
+  .clickable:hover, .clickable:focus-visible{ border-bottom-color:currentColor; outline:none; }
+  .clickable:active{ opacity:.6; }
+
+  .screen{
+    padding:14px 16px; height:440px; overflow-y:auto; line-height:1.7;
+  }
+  @media (max-width:600px){ .screen{ height:min(60vh, 440px); font-size:13px; } }
+  .screen::-webkit-scrollbar{width:8px;}
+  .screen::-webkit-scrollbar-thumb{background:#2a2626; border-radius:4px;}
+
+  .rm-void-trigger{ cursor:pointer; border-bottom:1px dotted currentColor; }
+  .rm-void-trigger:hover, .rm-void-trigger:focus-visible{ text-shadow:0 0 6px currentColor; outline:none; }
+
+  .screen.void{ display:flex; align-items:center; justify-content:center; background:#000; }
+  .void-mark{
+    font-size:64px; color:var(--yel-b); cursor:pointer; user-select:none;
+    text-shadow:0 0 16px var(--yel-b), 0 0 46px var(--yel-b);
+    animation:voidflicker 3s linear infinite;
+  }
+  @keyframes voidflicker{
+    0%, 19.9%, 22%, 62.9%, 64%, 64.9%, 70%, 100% { opacity:1; text-shadow:0 0 16px var(--yel-b), 0 0 46px var(--yel-b); }
+    20%, 21.9%, 63%, 63.9%, 65%, 69.9% { opacity:.25; text-shadow:none; }
+  }
+  @media (prefers-reduced-motion: reduce){ .void-mark{ animation:none; } }
+
+  .row{white-space:pre-wrap; word-break:break-word;}
+  .prompt-lead{color:var(--aqu);}
+  .prompt-path{color:var(--blu);}
+  .prompt-sym{color:var(--text3);}
+  .cmd-echo{color:var(--wht);}
+  .out{color:var(--fg);}
+  .out .dim{color:var(--text3);}
+  .out .grn{color:var(--grn);}
+  .out .yel{color:var(--yel);}
+  .out .pur{color:var(--pur);}
+  .out .aqu{color:var(--aqu);}
+  .out .red{color:var(--red);}
+  .out .org{color:var(--org);}
+  a{color:var(--blu); text-decoration:none;}
+  a:hover{color:var(--blu-b); text-decoration:underline;}
+  a:active{opacity:.6;}
+  a:focus-visible{outline:1px solid var(--yel); outline-offset:2px;}
+
+  .htop-meter{display:flex; align-items:center; gap:6px; margin:1px 0; font-size:13px;}
+  .htop-meter-label{width:34px; color:var(--text2); text-align:right; flex-shrink:0;}
+  .htop-meter-bar{color:var(--text3); flex-shrink:0;}
+  .htop-meter-bar .fill{color:var(--grn);}
+  .htop-meter-pct{color:var(--text2); width:100px; flex-shrink:0;}
+  .htop-info{margin:6px 0 8px 0; font-size:12px;}
+
+  .htop-table-header, .htop-table-row{display:flex; gap:6px; white-space:nowrap; font-size:12px;}
+  .htop-table-header{color:var(--bg); background:var(--aqu); padding:1px 4px; margin-top:4px; font-weight:bold;}
+  .htop-table-row{padding:1px 4px;}
+  .htop-table-row:nth-of-type(odd){ background:rgba(255,255,255,0.02); }
+  .col-pid{width:44px; text-align:right; flex-shrink:0;}
+  .col-user{width:56px; flex-shrink:0;}
+  .col-pri{width:26px; text-align:right; flex-shrink:0;}
+  .col-ni{width:22px; text-align:right; flex-shrink:0;}
+  .col-virt{width:52px; text-align:right; flex-shrink:0;}
+  .col-res{width:46px; text-align:right; flex-shrink:0;}
+  .col-shr{width:46px; text-align:right; flex-shrink:0;}
+  .col-s{width:14px; text-align:center; flex-shrink:0;}
+  .col-cpu{width:42px; text-align:right; flex-shrink:0;}
+  .col-mem{width:42px; text-align:right; flex-shrink:0;}
+  .col-time{width:56px; text-align:right; flex-shrink:0;}
+  .col-cmd{flex:1; text-align:left; color:var(--org); overflow:hidden; text-overflow:ellipsis;}
+  .htop-footer{margin-top:6px; font-size:12px;}
+  @media (max-width:600px){
+    .htop-table-header, .htop-table-row{ font-size:11px; gap:4px; }
+    .htop-meter-pct{ width:76px; }
+  }
+
+  .bar-fill{color:var(--grn);}
+  .bar-empty{color:#2a2626;}
+  .bar-pct{color:var(--yel);}
+
+  .fetch-wrap{display:flex; gap:22px; align-items:flex-start;}
+  @media (max-width:600px){ .fetch-wrap{ flex-direction:column; gap:8px; } }
+  .fetch-art{color:var(--blu); white-space:pre; line-height:1.2; font-size:13px; flex-shrink:0;}
+  .fetch-info{display:flex; flex-direction:column; gap:1px;}
+  .fetch-title{color:var(--yel-b); font-weight:bold;}
+  .fetch-rule{color:var(--text3);}
+  .fetch-row{display:flex; gap:8px;}
+  .fetch-label{color:var(--org); width:72px; flex-shrink:0;}
+  .fetch-val{color:var(--fg);}
+  .fetch-swatches{display:flex; gap:4px; margin-top:6px;}
+  .swatch{width:14px; height:14px; border-radius:2px;}
+
+  .inputline{ display:flex; align-items:center; padding:10px 16px; border-top:1px solid #2a2626; background:#151313; }
+  #stdin{
+    flex:1; min-width:0; background:transparent; border:none; outline:none;
+    color:var(--fg); font-family:inherit; font-size:14px; margin-left:6px;
+  }
+  #stdin:disabled{ opacity:.4; }
+  .cursor{
+    display:inline-block; width:8px; height:16px; background:var(--yel-b);
+    margin-left:2px; vertical-align:-3px; animation:blink 1s step-end infinite; flex-shrink:0;
+  }
+  @keyframes blink{ 50%{ opacity:0; } }
+  @media (prefers-reduced-motion: reduce){ .cursor{ animation:none; } .term-body, .term, .screen{ transition:none !important; } }
+
+  .statusbar{
+    display:flex; justify-content:space-between; padding:6px 12px;
+    background:#151313; border-top:1px solid #2a2626; color:var(--text3); font-size:11px;
+  }
+  .statusbar .b{color:var(--yel);}
+</style>
+</head>
+<body>
+<div class="term" id="term">
+  <div class="titlebar">
+    <button class="dot dot-close" id="btnClose" aria-label="close (restarts session)"></button>
+    <button class="dot dot-min" id="btnMin" aria-label="minimize"></button>
+    <button class="dot dot-max" id="btnMax" aria-label="maximize"></button>
+    <span>aspen@bio: ~</span>
+  </div>
+
+  <div class="term-body" id="termBody">
+  <div class="quickbar">
+    <button class="qbtn" data-cmd="whoami">whoami</button>
+    <button class="qbtn" data-cmd="ls /">ls</button>
+    <button class="qbtn" data-cmd="projects">projects</button>
+    <button class="qbtn" data-cmd="cat about.md">about</button>
+    <button class="qbtn" data-cmd="htop">htop</button>
+    <button class="qbtn" data-cmd="fastfetch">fastfetch</button>
+    <button class="qbtn" data-cmd="links">links</button>
+    <button class="qbtn" data-cmd="help">help</button>
+  </div>
+
+  <div class="screen" id="screen"></div>
+
+  <div class="inputline">
+    <span class="prompt-lead">aspen</span><span class="prompt-sym">@</span><span class="prompt-path">bio</span><span class="prompt-sym" id="pCwd">:~$</span>
+    <input id="stdin" autocomplete="off" spellcheck="false" disabled aria-label="terminal input">
+    <span class="cursor" id="cursor"></span>
+  </div>
+
+  <div class="statusbar">
+    <span>uptime <span class="b" id="uptime">0s</span></span>
+    <span id="hint">booting…</span>
+  </div>
+  </div>
+</div>
+
+<script>
+const scr = document.getElementById('screen');
+const input = document.getElementById('stdin');
+const cwdEl = document.getElementById('pCwd');
+const hintEl = document.getElementById('hint');
+const uptimeEl = document.getElementById('uptime');
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+let history = [], hIdx = -1;
+let cwd = '~/aspen';
+let typing = false;
+let bootStart = Date.now();
+let htopInterval = null;
+
+const fs = {
+  '~/aspen': { type:'dir', children:['about.md','contact.txt','projects/'] },
+  '~/aspen/projects': { type:'dir', children:null },
+  '~/aspen/about.md': { type:'file', content:
+`who: aspen — high school, Cupertino
+into: ML, CLI tools, Linux, agentic systems
+also: skiing, soccer, photography` },
+  '~/aspen/contact.txt': { type:'file', content:
+`github    <a href="https://github.com/Solar-cmd" target="_blank">github.com/Solar-cmd</a>
+discord   <a href="https://discord.com/users/824112214977937429" target="_blank">Solarflare_1</a>
+instagram <a href="https://www.instagram.com/aspenbwang/" target="_blank">@aspenbwang</a>
+email     <a href="mailto:aspenbwang@gmail.com">aspenbwang@gmail.com</a>` },
+
+  '/': { type:'dir', children:['bin/','boot/','dev/','etc/','home/','lib/','media/','mnt/','opt/','proc/','root/','run/','srv/','sys/','tmp/','usr/','var/'] },
+  '/boot': { type:'dir', children:['vmlinuz-6.9.1-cupertino','initrd.img-6.9.1-cupertino','grub/'] },
+  '/boot/grub': { type:'dir', children:['grub.cfg'] },
+  '/boot/grub/grub.cfg': { type:'file', content:'# minimal bootloader config\ndefault=0\ntimeout=3' },
+  '/dev': { type:'dir', children:['null','zero','tty','sda1'] },
+  '/dev/null': { type:'file', content:'' },
+  '/dev/zero': { type:'file', content:'<span class="dim">^C</span>' },
+  '/dev/tty': { type:'file', content:'<span class="red">cat: tty: Input/output error</span>' },
+  '/dev/sda1': { type:'file', content:'<span class="red">cat: sda1: Permission denied</span>' },
+  '/etc': { type:'dir', children:['os-release','hostname','passwd','fstab'] },
+  '/etc/os-release': { type:'file', content:
+`NAME="Archcraft"
+VERSION="1.0 (Cupertino)"
+ID=archcraft
+PRETTY_NAME="Archcraft 1.0"
+HOME_URL="<a href="https://github.com/Solar-cmd" target="_blank">https://github.com/Solar-cmd</a>"` },
+  '/etc/hostname': { type:'file', content:'bio' },
+  '/etc/passwd': { type:'file', content:
+`root:x:0:0:root:/root:/bin/bash
+aspen:x:1000:1000:aspen:/home/aspen:/bin/zsh` },
+  '/etc/fstab': { type:'file', content:
+`# <filesystem>   <mount point>   <type>   <options>
+tmpfs             /tmp            tmpfs    defaults` },
+  '/home': { type:'dir', children:['aspen/'] },
+  '/lib': { type:'dir', children:['modules/'] },
+  '/lib/modules': { type:'dir', children:[] },
+  '/media': { type:'dir', children:[] },
+  '/mnt': { type:'dir', children:[] },
+  '/opt': { type:'dir', children:[] },
+  '/proc': { type:'dir', children:['version','cpuinfo','uptime'] },
+  '/proc/version': { type:'file', content:'Linux version 6.9.1-cupertino (aspen@bio) #1 SMP PREEMPT' },
+  '/proc/cpuinfo': { type:'file', content:'model name : probably too much coffee\ncores      : 4' },
+  '/proc/uptime': { type:'file', content:'' },
+  '/root': { type:'dir', restricted:true, children:[] },
+  '/run': { type:'dir', children:[] },
+  '/srv': { type:'dir', children:[] },
+  '/sys': { type:'dir', children:['class/'] },
+  '/sys/class': { type:'dir', children:[] },
+  '/tmp': { type:'dir', children:[] },
+  '/usr': { type:'dir', children:['bin/','lib/','local/','share/'] },
+  '/usr/lib': { type:'dir', children:[] },
+  '/usr/local': { type:'dir', children:[] },
+  '/usr/share': { type:'dir', children:[] },
+  '/var': { type:'dir', children:['log/','tmp/'] },
+  '/var/tmp': { type:'dir', children:[] },
+  '/var/log': { type:'dir', children:['syslog','auth.log'] },
+  '/var/log/syslog': { type:'file', content:
+`Aug 21 09:14:02 bio systemd[1]: Started skills.service.
+Aug 21 09:14:03 bio systemd[1]: Started projects.service.
+Aug 21 09:41:17 bio kernel: [ OK ] aspen logged in` },
+  '/var/log/auth.log': { type:'file', content:'Aug 21 09:14:00 bio login: aspen logged in on tty1' },
+};
+
+const BIN_NAMES = ['bash','zsh','python3','node','git','vim','htop','fastfetch','ls','cat'];
+fs['/bin'] = { type:'dir', children: BIN_NAMES.slice() };
+fs['/usr/bin'] = { type:'dir', children: BIN_NAMES.slice() };
+BIN_NAMES.forEach(n=>{
+  const note = `<span class="dim">cat: ${n}: binary file (ELF), not displaying</span>`;
+  fs['/bin/'+n] = { type:'file', content: note };
+  fs['/usr/bin/'+n] = { type:'file', content: note };
+});
+
+const projects = [
+  ['OpenClaw',                  'agentic system, SOUL.md behavioral spec + HEARTBEAT.md scheduler, Obsidian pipeline, AWS Bedrock', ''],
+  ['vaultfs',                   'client-side encrypted file manager — OPFS/IndexedDB VFS, real xterm.js shell, AES-256-GCM encryption, custom multi-pass Hexagon cipher, drag-drop UI, no backend', ''],
+  ['neural-arithmetic-compress','DistilGPT2 next-token probs feeding an arithmetic coder, ~20% smaller than zlib on prose', 'https://github.com/Solar-cmd/neural-arithmetic-compress'],
+  ['pwnagotchi',                 'Raspberry Pi Zero WH build — Waveshare e-ink display, PiSugar 3 battery', ''],
+];
+fs['~/aspen/projects'].children = projects.map(p => p[0]);
+
+function isRestricted(p){ return p === '/root' || p.startsWith('/root/'); }
+
+function resolvePath(p){
+  if(!p) return cwd;
+  if(p === '~') return '~/aspen';
+  if(p.startsWith('~/')) return '~/aspen/' + p.slice(2).replace(/\/$/, '');
+  if(p.startsWith('/')){
+    let resolved = p.replace(/\/$/, '') || '/';
+    if(resolved === '/home/aspen') resolved = '~/aspen';
+    else if(resolved.startsWith('/home/aspen/')) resolved = '~/aspen/' + resolved.slice('/home/aspen/'.length);
+    return resolved;
+  }
+  if(p === '..'){
+    if(cwd === '~/aspen') return '/home';
+    if(cwd.startsWith('~/aspen/')){
+      const parts = cwd.split('/'); parts.pop();
+      return parts.join('/');
+    }
+    if(cwd === '/') return '/';
+    const parts = cwd.split('/'); parts.pop();
+    const joined = parts.join('/');
+    return joined.length ? joined : '/';
+  }
+  return (cwd === '/' ? '/'+p : cwd+'/'+p).replace(/\/$/, '');
+}
+
+function addRow(html, cls='out'){
+  const d = document.createElement('div');
+  d.className = 'row ' + cls;
+  d.innerHTML = html;
+  scr.appendChild(d);
+  scr.scrollTop = scr.scrollHeight;
+  return d;
+}
+
+function escapeHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function typeOut(html, cls='out', speed=10){
+  return new Promise(resolve=>{
+    if(reduceMotion){ addRow(html, cls); resolve(); return; }
+    const d = document.createElement('div');
+    d.className = 'row ' + cls;
+    scr.appendChild(d);
+    let i = 0;
+    let built = '';
+    typing = true;
+    function step(){
+      if(i >= html.length){ typing = false; scr.scrollTop = scr.scrollHeight; resolve(); return; }
+      if(html[i] === '<'){
+        const close = html.indexOf('>', i);
+        built += html.slice(i, close+1);
+        i = close+1;
+      } else {
+        built += html[i];
+        i++;
+      }
+      d.innerHTML = built;
+      scr.scrollTop = scr.scrollHeight;
+      setTimeout(step, speed);
+    }
+    step();
+  });
+}
+
+function echoCmd(cmd){
+  addRow(`<span class="prompt-lead">aspen</span><span class="prompt-sym">@</span><span class="prompt-path">bio</span><span class="prompt-sym">:${escapeHtml(cwd.replace('~/aspen','~'))}$</span> <span class="cmd-echo">${escapeHtml(cmd)}</span>`);
+}
+
+function progressBar(label){
+  return new Promise(resolve=>{
+    const width = 36;
+    if(reduceMotion){
+      addRow(`<span class="aqu">==></span> Fetching ${escapeHtml(label)}\n<span class="dim">[</span><span class="bar-fill">${'='.repeat(width)}</span><span class="dim">]</span> <span class="bar-pct">100%</span>`);
+      resolve();
+      return;
+    }
+    addRow(`<span class="aqu">==></span> Fetching ${escapeHtml(label)}`);
+    const barRow = addRow('');
+    let pct = 0;
+    function tick(){
+      pct = Math.min(100, pct + Math.random()*16 + 5);
+      const filled = Math.round(width * pct / 100);
+      const fillStr = '='.repeat(filled);
+      const emptyStr = ' '.repeat(width - filled);
+      barRow.innerHTML = `<span class="dim">[</span><span class="bar-fill">${fillStr}</span><span class="bar-empty">${emptyStr}</span><span class="dim">]</span> <span class="bar-pct">${pct.toFixed(0)}%</span>`;
+      scr.scrollTop = scr.scrollHeight;
+      if(pct < 100){ setTimeout(tick, 45 + Math.random()*70); }
+      else { setTimeout(resolve, 140); }
+    }
+    tick();
+  });
+}
+
+const commandNames = ['help','whoami','ls','cat','cd','projects','open','links','htop','fastfetch','clear','history'];
+
+const commands = {
+  async help(){
+    await typeOut(`<span class="dim">available commands:</span>
+  <span class="yel">whoami</span>          who you're talking to
+  <span class="yel">ls</span> [dir]        list files
+  <span class="yel">cat</span> &lt;file&gt;      print a file
+  <span class="yel">cd</span> &lt;dir&gt;        change directory
+  <span class="yel">projects</span>        list projects
+  <span class="yel">open</span> &lt;project&gt;  open a project
+  <span class="yel">links</span>           socials / contact
+  <span class="yel">htop</span>            live process monitor
+  <span class="yel">fastfetch</span>       system info
+  <span class="yel">history</span>         command history
+  <span class="yel">clear</span>           clear the screen
+
+  <span class="dim">tip: cd / to explore the rest of the filesystem</span>`);
+  },
+  async whoami(){
+    await typeOut(`<span class="grn">aspen</span> <span class="dim">— Cupertino, curious</span>`);
+  },
+  async ls(arg){
+    const p = resolvePath(arg);
+    if(isRestricted(p)){ await typeOut(`<span class="red">ls: cannot open directory '${escapeHtml(arg||p)}': Permission denied</span>`); return; }
+    const node = fs[p];
+    if(!node || node.type !== 'dir'){ await typeOut(`<span class="red">ls: ${escapeHtml(arg||p)}: not a directory</span>`); return; }
+    const items = node.children.map(c => {
+      const isDir = c.endsWith('/');
+      const cmd = isDir ? `cd ${c.slice(0,-1)}` : `cat ${c}`;
+      return `<span class="aqu clickable" tabindex="0" data-cmd="${escapeHtml(cmd)}">${c}</span>`;
+    }).join('   ');
+    await typeOut(items, 'out', 4);
+  },
+  async cat(arg){
+    if(!arg){ await typeOut(`<span class="red">cat: missing file operand</span>`); return; }
+    const p = resolvePath(arg);
+    if(isRestricted(p)){ await typeOut(`<span class="red">cat: ${escapeHtml(arg)}: Permission denied</span>`); return; }
+    if(p === '/proc/uptime'){
+      const s = Math.floor((Date.now()-bootStart)/1000);
+      await typeOut(`${s}.00 ${(s*0.91).toFixed(2)}`);
+      return;
+    }
+    const node = fs[p];
+    if(node && node.type === 'file'){ await typeOut(node.content); }
+    else { await typeOut(`<span class="red">cat: ${escapeHtml(arg)}: No such file</span>`); }
+  },
+  async cd(arg){
+    if(!arg || arg === '~'){ cwd = '~/aspen'; }
+    else {
+      const p = resolvePath(arg);
+      if(isRestricted(p)){ await typeOut(`<span class="red">cd: ${escapeHtml(arg)}: Permission denied</span>`); return; }
+      if(fs[p] && fs[p].type === 'dir'){ cwd = p; }
+      else { await typeOut(`<span class="red">cd: ${escapeHtml(arg)}: No such directory</span>`); return; }
+    }
+    cwdEl.textContent = ':' + cwd.replace('~/aspen','~') + '$';
+  },
+  async projects(){
+    const rows = projects.map(([n,d,link])=>
+      `  <span class="org clickable" tabindex="0" data-cmd="open ${escapeHtml(n)}">${n}</span> <span class="dim">— ${d}</span>` + (link ? ` <a href="${link}" target="_blank">↗</a>` : '')
+    ).join('\n');
+    await typeOut(rows, 'out', 2);
+  },
+  async open(arg){
+    if(!arg){ await typeOut(`<span class="red">open: missing project name</span>`); return; }
+    const p = projects.find(p => p[0].toLowerCase() === arg.toLowerCase());
+    if(!p){ await typeOut(`<span class="red">open: no project named '${escapeHtml(arg)}'</span>`); return; }
+    await typeOut(`<span class="org">${p[0]}</span>\n  ${p[1]}` + (p[2] ? `\n  <a href="${p[2]}" target="_blank">${p[2]}</a>` : `\n  <span class="dim">(no public link yet)</span>`));
+  },
+  async links(){
+    await commands.cat('contact.txt');
+  },
+  async history(){
+    if(!history.length){ await typeOut(`<span class="dim">(empty)</span>`); return; }
+    await typeOut(history.map((h,i)=>`  ${i+1}  ${escapeHtml(h)}`).join('\n'), 'out', 2);
+  },
+  async clear(){
+    scr.innerHTML = '';
+    stopHtop();
+  },
+  async htop(){
+    stopHtop();
+    const cores = 4;
+    const container = document.createElement('div');
+    container.className = 'row out';
+
+    const barWidth = 24;
+    const meterBar = (pct, id) => {
+      const filled = Math.round(barWidth * pct / 100);
+      return `<span class="htop-meter-bar" data-meter="${id}">[<span class="fill">${'|'.repeat(filled)}</span>${' '.repeat(barWidth-filled)}]</span>`;
+    };
+
+    let coreRows = '';
+    for(let i=1;i<=cores;i++){
+      coreRows += `<div class="htop-meter"><span class="htop-meter-label">${i}</span>${meterBar(0,'core'+i)}<span class="htop-meter-pct" data-meter-pct="core${i}">0.0%</span></div>`;
+    }
+    const memRow = `<div class="htop-meter"><span class="htop-meter-label">Mem</span>${meterBar(0,'mem')}<span class="htop-meter-pct" data-meter-pct="mem">0.0G/8.0G</span></div>`;
+    const swpRow = `<div class="htop-meter"><span class="htop-meter-label">Swp</span>${meterBar(0,'swp')}<span class="htop-meter-pct" data-meter-pct="swp">0M/2.0G</span></div>`;
+    const infoLine = `<div class="htop-info dim">Tasks: ${projects.length+9}, ${projects.length+2} thr; 1 running &nbsp; Load average: <span data-load>0.00 0.00 0.00</span> &nbsp; Uptime: <span data-htop-uptime>${uptimeEl.textContent}</span></div>`;
+
+    const header = `<div class="htop-table-header">
+      <span class="col-pid">PID</span><span class="col-user">USER</span><span class="col-pri">PRI</span><span class="col-ni">NI</span><span class="col-virt">VIRT</span><span class="col-res">RES</span><span class="col-shr">SHR</span><span class="col-s">S</span><span class="col-cpu">CPU%</span><span class="col-mem">MEM%</span><span class="col-time">TIME+</span><span class="col-cmd">Command</span>
+    </div>`;
+
+    const rows = projects.map((p,i)=>{
+      const pid = 1000+i*3;
+      return `<div class="htop-table-row" data-pid="${pid}">
+        <span class="col-pid">${pid}</span><span class="col-user">aspen</span><span class="col-pri">20</span><span class="col-ni">0</span>
+        <span class="col-virt">${(640+i*173)%999}M</span><span class="col-res">${(180+i*61)%400}M</span><span class="col-shr">${(30+i*17)%80}M</span>
+        <span class="col-s" data-state="${pid}">S</span>
+        <span class="col-cpu" data-cpu="${pid}">0.0</span><span class="col-mem" data-mem="${pid}">0.0</span>
+        <span class="col-time" data-time="${pid}">0:00.00</span><span class="col-cmd clickable" tabindex="0" data-cmd="open ${escapeHtml(p[0])}">${p[0]}</span>
+      </div>`;
+    }).join('');
+
+    const footer = `<div class="htop-footer dim">F1Help  F2Setup  F3Search  F4Filter  F5Tree  F6SortBy  F9Kill  F10Quit &nbsp;&nbsp; ctrl-c / any command to stop</div>`;
+
+    container.innerHTML = coreRows + memRow + swpRow + infoLine + header + rows + footer;
+    scr.appendChild(container);
+    scr.scrollTop = scr.scrollHeight;
+
+    const timeAccum = {};
+    projects.forEach((p,i)=>{ timeAccum[1000+i*3] = i*7.3; });
+
+    function step(){
+      for(let i=1;i<=cores;i++){
+        const pct = Math.round((15 + Math.random()*75) * 10)/10;
+        const bar = container.querySelector(`[data-meter="core${i}"]`);
+        const lbl = container.querySelector(`[data-meter-pct="core${i}"]`);
+        const filled = Math.round(barWidth * pct / 100);
+        if(bar) bar.innerHTML = `[<span class="fill">${'|'.repeat(filled)}</span>${' '.repeat(barWidth-filled)}]`;
+        if(lbl) lbl.textContent = pct.toFixed(1) + '%';
+      }
+      const memGb = (1.1 + Math.random()*1.8).toFixed(1);
+      const memPct = Math.min(100, (memGb/8)*100);
+      const memBar = container.querySelector('[data-meter="mem"]');
+      const memLbl = container.querySelector('[data-meter-pct="mem"]');
+      const mFilled = Math.round(barWidth * memPct / 100);
+      if(memBar) memBar.innerHTML = `[<span class="fill">${'|'.repeat(mFilled)}</span>${' '.repeat(barWidth-mFilled)}]`;
+      if(memLbl) memLbl.textContent = `${memGb}G/8.0G`;
+
+      const swpM = Math.round(Math.random()*40);
+      const swpBar = container.querySelector('[data-meter="swp"]');
+      const swpLbl = container.querySelector('[data-meter-pct="swp"]');
+      const sFilled = Math.round(barWidth * (swpM/2000) * 100 / 100);
+      if(swpBar) swpBar.innerHTML = `[${' '.repeat(barWidth)}]`;
+      if(swpLbl) swpLbl.textContent = `${swpM}M/2.0G`;
+
+      const loadEl = container.querySelector('[data-load]');
+      if(loadEl){
+        const l1 = (0.2 + Math.random()*1.4).toFixed(2);
+        const l2 = (0.2 + Math.random()*1.2).toFixed(2);
+        const l3 = (0.2 + Math.random()*1.0).toFixed(2);
+        loadEl.textContent = `${l1} ${l2} ${l3}`;
+      }
+      const upEl = container.querySelector('[data-htop-uptime]');
+      if(upEl) upEl.textContent = uptimeEl.textContent;
+
+      projects.forEach((p,i)=>{
+        const pid = 1000+i*3;
+        const cpuEl = container.querySelector(`[data-cpu="${pid}"]`);
+        const memEl = container.querySelector(`[data-mem="${pid}"]`);
+        const stEl = container.querySelector(`[data-state="${pid}"]`);
+        const tEl = container.querySelector(`[data-time="${pid}"]`);
+        if(cpuEl) cpuEl.textContent = (Math.random()*30).toFixed(1);
+        if(memEl) memEl.textContent = (0.5 + Math.random()*8).toFixed(1);
+        if(stEl) stEl.textContent = Math.random() < 0.85 ? 'S' : 'R';
+        timeAccum[pid] += 0.7;
+        const m = Math.floor(timeAccum[pid]/60);
+        const s = (timeAccum[pid]%60).toFixed(2).padStart(5,'0');
+        if(tEl) tEl.textContent = `${m}:${s}`;
+      });
+    }
+
+    if(reduceMotion){ step(); return; }
+    step();
+    htopInterval = setInterval(step, 700);
+  },
+  async fastfetch(){
+    const art = [
+      '          .',
+      '         / \\',
+      '        /   \\',
+      '       /\\    \\',
+      '      /       \\',
+      '     /         \\',
+      '    /    .-.    \\',
+      '   /    |   |   _\\',
+      '  /   _.\'   \'._   \\',
+      ' /_.-\'         \'-._\\',
+    ].join('\n');
+    const info = [
+      ['OS', 'Archcraft x86_64'],
+      ['Host', 'bio.html'],
+      ['Kernel', 'Darwin 23.5.0'],
+      ['Uptime', uptimeEl.textContent],
+      ['Shell', 'zsh 5.9'],
+      ['Terminal', 'kape'],
+      ['CPU', 'probably too much coffee'],
+    ];
+    const swatchColors = ['--bg','--red','--grn','--yel','--blu','--pur','--aqu','--wht'];
+    const rows = info.map(([k,v]) =>
+      `<div class="fetch-row"><span class="fetch-label">${k}</span><span class="fetch-val">${escapeHtml(v)}</span></div>`
+    ).join('');
+    const swatches = swatchColors.map(c => `<div class="swatch" style="background:var(${c}); border:1px solid #2a2626;"></div>`).join('');
+    const block = document.createElement('div');
+    block.className = 'row out';
+    block.innerHTML = `<div class="fetch-wrap">
+      <div class="fetch-art">${art}</div>
+      <div class="fetch-info">
+        <span class="fetch-title">aspen@bio</span>
+        <span class="fetch-rule">------------------</span>
+        ${rows}
+        <div class="fetch-swatches">${swatches}</div>
+      </div>
+    </div>`;
+    scr.appendChild(block);
+    scr.scrollTop = scr.scrollHeight;
+  },
+};
+
+function stopHtop(){ if(htopInterval){ clearInterval(htopInterval); htopInterval = null; } }
+
+commands.matrix = async function(){
+  await typeOut(`<span class="grn">wake up, aspen...</span>`);
+  await typeOut(`<span class="dim">(found the hidden command. that's it, that's the reward.)</span>`);
+};
+
+let pendingSudo = null;
+
+commands.sudo = async function(arg){
+  if(!arg){ await typeOut(`<span class="red">usage: sudo &lt;command&gt;</span>`); return; }
+  pendingSudo = { cmd: arg, attempts: 0 };
+  addRow(`<span class="dim">[sudo] password for aspen:</span>`);
+  input.type = 'password';
+};
+
+async function handleSudoPassword(pw){
+  const info = pendingSudo;
+  pendingSudo = null;
+  input.type = 'text';
+  if(pw !== '374021'){
+    info.attempts++;
+    if(info.attempts < 2){
+      await typeOut(`<span class="red">Sorry, try again.</span>`);
+      addRow(`<span class="dim">[sudo] password for aspen:</span>`);
+      pendingSudo = info;
+      input.type = 'password';
+    } else {
+      await typeOut(`<span class="red">sudo: 2 incorrect password attempts</span>`);
+    }
+    input.focus();
+    return;
+  }
+  await runSudoCommand(info.cmd);
+  input.focus();
+}
+
+async function runSudoCommand(cmd){
+  const normalized = cmd.trim().toLowerCase().replace(/\s+/g, ' ');
+  if(/^rm\s+-r?f-?r?\s+\/\s*$/.test(normalized) || /^rm\s+-fr\s+\/\s*$/.test(normalized)){
+    await typeOut(`<span class="red">rm: descending into '/'</span>`, 'out', 6);
+    const targets = ['/bin','/boot','/dev','/etc','/home/aspen/about.md','/home/aspen/contact.txt','/home/aspen/projects','/lib','/proc','/root','/run','/srv','/sys','/tmp','/usr','/var'];
+    for(const t of targets){
+      await typeOut(`<span class="dim">removed '${t}'</span>`, 'out', 3);
+    }
+    await new Promise(r=>setTimeout(r, reduceMotion ? 0 : 350));
+    await typeOut(`<span class="red rm-void-trigger" tabindex="0">rm: cannot remove '/': Is the meaning of life</span>`, 'out', 6);
+    const trigger = scr.lastElementChild ? scr.lastElementChild.querySelector('.rm-void-trigger') : null;
+    if(trigger){
+      trigger.addEventListener('mouseenter', descendIntoVoid, { once:true });
+      trigger.addEventListener('focus', descendIntoVoid, { once:true });
+    }
+    await new Promise(r=>setTimeout(r, reduceMotion ? 0 : 300));
+    await typeOut(`<span class="grn">(relax — nothing was actually deleted. nice try though.)</span>`);
+    return;
+  }
+  await typeOut(`<span class="dim">[sudo] access granted — but there's nothing here that actually needs root.</span>`);
+}
+
+let voidTriggered = false;
+const VOID_LINES = [
+  `<span class="dim">[void]</span> mounting /dev/self`,
+  `<span class="dim">[void]</span> unmounting ego`,
+  `<span class="aqu">searching</span> /usr/share/purpose... not found`,
+  `<span class="yel">warning:</span> stack overflow in existential_dread()`,
+  `<span class="dim">[void]</span> consulting oracle.db`,
+  `<span class="red">error:</span> segmentation fault at 0x42`,
+  `<span class="dim">[void]</span> recursing into recursing into recursing`,
+  `checksum mismatch: reality.iso`,
+  `<span class="dim">[void]</span> 3.8 billion years elapsed`,
+  `<span class="aqu">compiling</span> meaning.c ... 0 errors, ∞ warnings`,
+  `<span class="dim">[void]</span> asking the void nicely`,
+  `<span class="dim">[void]</span> the void does not respond`,
+  `process 42 defunct`,
+  `<span class="dim">[void]</span> retry (attempt 9999999)`,
+  `<span class="yel">note:</span> some questions do not resolve`,
+  `<span class="dim">[void]</span> still searching...`,
+  `entropy increasing`,
+  `<span class="dim">[void]</span> nothing found in /root either`,
+  `kernel: soft lockup — reality not responding`,
+  `<span class="dim">[void]</span> loading philosophy.dll`,
+  `<span class="red">panic:</span> unable to divide by zero (tried anyway)`,
+  `<span class="dim">[void]</span> approaching heat death of universe (eta: later)`,
+  `defrag: meaning.dat 0% complete`,
+  `<span class="dim">[void]</span> pinging god@localhost: no route to host`,
+  `<span class="aqu">indexing</span> every question ever asked`,
+  `answer.txt: file not found`,
+  `<span class="dim">[void]</span> 42 was already taken`,
+  `buffer overflow in hope[]`,
+  `<span class="dim">[void]</span> trying a different universe`,
+  `<span class="dim">[void]</span> that one didn't work either`,
+];
+
+async function descendIntoVoid(){
+  if(voidTriggered) return;
+  voidTriggered = true;
+  stopHtop();
+  input.disabled = true;
+  hintEl.textContent = 'press any key to skip';
+
+  const totalMs = reduceMotion ? 0 : 70000;
+  const start = Date.now();
+  let skip = false;
+  const skipHandler = ()=>{ skip = true; };
+  document.addEventListener('keydown', skipHandler, { once:true });
+
+  while(!skip && Date.now() - start < totalMs){
+    addRow(VOID_LINES[Math.floor(Math.random() * VOID_LINES.length)]);
+    while(scr.children.length > 300){ scr.removeChild(scr.firstChild); }
+    await new Promise(r=>setTimeout(r, 30 + Math.random()*90));
+  }
+  document.removeEventListener('keydown', skipHandler);
+
+  scr.innerHTML = '';
+  scr.classList.add('void');
+  const mark = document.createElement('div');
+  mark.className = 'void-mark';
+  mark.textContent = './';
+  mark.tabIndex = 0;
+  scr.appendChild(mark);
+  hintEl.textContent = 'click to return';
+
+  function exitVoid(){
+    scr.classList.remove('void');
+    scr.innerHTML = '';
+    voidTriggered = false;
+    boot();
+  }
+  mark.addEventListener('click', exitVoid, { once:true });
+  document.addEventListener('keydown', exitVoid, { once:true });
+}
+
+function fuzzyGuess(name){
+  let best = null, bestScore = Infinity;
+  for(const c of commandNames){
+    const score = levenshtein(name, c);
+    if(score < bestScore){ bestScore = score; best = c; }
+  }
+  return bestScore <= 2 ? best : null;
+}
+function levenshtein(a,b){
+  const m = Array.from({length:a.length+1}, (_,i)=>[i,...Array(b.length).fill(0)]);
+  for(let j=0;j<=b.length;j++) m[0][j]=j;
+  for(let i=1;i<=a.length;i++) for(let j=1;j<=b.length;j++)
+    m[i][j] = a[i-1]===b[j-1] ? m[i-1][j-1] : 1+Math.min(m[i-1][j-1],m[i-1][j],m[i][j-1]);
+  return m[a.length][b.length];
+}
+
+async function run(raw, bar=false){
+  const cmd = raw.trim();
+  if(!cmd) return;
+  stopHtop();
+  echoCmd(cmd);
+  history.push(cmd);
+  hIdx = history.length;
+
+  const [name, ...rest] = cmd.split(' ');
+  const arg = rest.join(' ');
+
+  if(commands[name]){
+    if(bar){ await progressBar(name); }
+    await commands[name](arg);
+  } else {
+    const guess = fuzzyGuess(name);
+    if(guess){ await typeOut(`<span class="red">command not found:</span> ${escapeHtml(name)} <span class="dim">— did you mean '${guess}'?</span>`); }
+    else { await typeOut(`<span class="red">command not found:</span> ${escapeHtml(name)} <span class="dim">— try 'help'</span>`); }
+  }
+}
+
+input.addEventListener('keydown', e=>{
+  if(pendingSudo){
+    if(e.key === 'Enter'){ const v = input.value; input.value=''; handleSudoPassword(v); }
+    else if(e.ctrlKey && e.key === 'c'){ e.preventDefault(); pendingSudo = null; input.type='text'; input.value=''; addRow(`<span class="dim">^C</span>`); }
+    return;
+  }
+  if(typing && e.key !== 'Tab') return;
+  if(e.key === 'Enter'){
+    const v = input.value; input.value=''; run(v);
+  } else if(e.key === 'ArrowUp'){
+    if(hIdx > 0){ hIdx--; input.value = history[hIdx]; }
+    e.preventDefault();
+  } else if(e.key === 'ArrowDown'){
+    if(hIdx < history.length-1){ hIdx++; input.value = history[hIdx]; }
+    else { hIdx = history.length; input.value=''; }
+    e.preventDefault();
+  } else if(e.key === 'Tab'){
+    e.preventDefault();
+    const partial = input.value.trim();
+    if(!partial) return;
+    if(/^sudo\s/i.test(partial)){
+      const argPart = partial.replace(/^sudo\s+/i, '');
+      const argCandidates = ['rm -rf /'].filter(c => c.startsWith(argPart));
+      if(argCandidates.length === 1){ input.value = 'sudo ' + argCandidates[0]; return; }
+      else if(argCandidates.length > 1){ addRow(argCandidates.map(c=>'sudo '+c).join('   '), 'out'); return; }
+    }
+    const matches = commandNames.filter(c => c.startsWith(partial));
+    if(matches.length === 1){ input.value = matches[0] + ' '; }
+    else if(matches.length > 1){ addRow(matches.join('   '), 'out'); }
+  } else if(e.ctrlKey && e.key === 'l'){
+    e.preventDefault(); commands.clear();
+  } else if(e.ctrlKey && e.key === 'c'){
+    e.preventDefault(); stopHtop(); input.value='';
+  }
+});
+
+async function typeAndRun(cmd){
+  if(typing || input.disabled) return;
+  input.value = '';
+  for(const ch of cmd){
+    input.value += ch;
+    await new Promise(r=>setTimeout(r, reduceMotion ? 0 : 18));
+  }
+  await new Promise(r=>setTimeout(r, 120));
+  const v = input.value; input.value=''; await run(v, true);
+  input.focus();
+}
+
+document.querySelectorAll('.qbtn').forEach(b=>{
+  b.addEventListener('click', ()=> typeAndRun(b.dataset.cmd));
+});
+
+scr.addEventListener('click', e=>{
+  const el = e.target.closest('.clickable');
+  if(!el) return;
+  e.stopPropagation();
+  typeAndRun(el.dataset.cmd);
+});
+
+scr.addEventListener('keydown', e=>{
+  if(e.key !== 'Enter' && e.key !== ' ') return;
+  const el = e.target.closest('.clickable');
+  if(!el) return;
+  e.preventDefault();
+  typeAndRun(el.dataset.cmd);
+});
+
+scr.addEventListener('mouseup', ()=>{
+  if(window.getSelection().toString()) return;
+  input.focus();
+});
+
+setInterval(()=>{
+  const s = Math.floor((Date.now()-bootStart)/1000);
+  const m = Math.floor(s/60), r = s%60;
+  uptimeEl.textContent = m>0 ? `${m}m ${r}s` : `${r}s`;
+}, 1000);
+
+async function boot(){
+  const lines = [
+    ['<span class="dim">[ OK ]</span> mounting ~/aspen', 6],
+    ['<span class="dim">[ OK ]</span> starting skills.service', 6],
+    ['<span class="dim">[ OK ]</span> starting projects.service (4 running)', 6],
+    ['<span class="grn">aspen@bio</span> is up.', 10],
+    ['type <span class="yel">help</span> to see commands.', 10],
+  ];
+  for(const [html, speed] of lines){ await typeOut(html, 'out', reduceMotion ? 0 : speed); }
+  input.disabled = false;
+  input.focus();
+  hintEl.textContent = "type 'help' to start";
+}
+
+// ---------- traffic light buttons ----------
+const termEl = document.getElementById('term');
+const btnClose = document.getElementById('btnClose');
+const btnMin = document.getElementById('btnMin');
+const btnMax = document.getElementById('btnMax');
+
+let restarting = false;
+btnClose.addEventListener('click', async ()=>{
+  if(restarting || termEl.classList.contains('collapsed')) return;
+  restarting = true;
+  stopHtop();
+  pendingSudo = null;
+  input.type = 'text';
+  input.disabled = true;
+  await typeOut(`<span class="dim">logout</span>`, 'out', reduceMotion ? 0 : 10);
+  await typeOut(`<span class="dim">[ OK ]</span> stopping projects.service`, 'out', reduceMotion ? 0 : 6);
+  await typeOut(`<span class="dim">[ OK ]</span> connection closed.`, 'out', reduceMotion ? 0 : 6);
+  await new Promise(r=>setTimeout(r, reduceMotion ? 0 : 400));
+  scr.innerHTML = '';
+  history = []; hIdx = -1; cwd = '~/aspen';
+  cwdEl.textContent = ':~$';
+  bootStart = Date.now();
+  hintEl.textContent = 'booting…';
+  await boot();
+  restarting = false;
+});
+
+btnMin.addEventListener('click', ()=>{
+  termEl.classList.toggle('collapsed');
+  if(!termEl.classList.contains('collapsed')) input.focus();
+});
+
+btnMax.addEventListener('click', ()=>{
+  termEl.classList.toggle('maxed');
+});
+
+boot();
+</script>
+</body>
+</html>
