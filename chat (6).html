@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --r-xs:12px; --r-sm:18px; --r-md:24px; --r-lg:32px; --r-xl:40px;
+  --dur:.22s; --ease:cubic-bezier(.2,0,0,1);
+  --spring:cubic-bezier(.2,1.3,.4,1);
+}
+[data-theme="dark"]{
+  --bg:#000; --surface:#111; --surface-2:#1a1a1a; --surface-3:#242424;
+  --line:#2b2b2b; --text:#fff; --muted:#9a9a9a; --inv-bg:#fff; --inv-text:#000;
+  --shadow:0 2px 24px rgba(0,0,0,.6);
+}
+[data-theme="light"]{
+  --bg:#fff; --surface:#f2f2f2; --surface-2:#e8e8e8; --surface-3:#dedede;
+  --line:#dcdcdc; --text:#000; --muted:#6b6b6b; --inv-bg:#000; --inv-text:#fff;
+  --shadow:0 2px 24px rgba(0,0,0,.08);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:"Figtree",system-ui,-apple-system,sans-serif;
+  font-size:16px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  display:flex; flex-direction:column;
+}
+button,input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+::selection{background:var(--text);color:var(--bg)}
+
+/* ---------- top ---------- */
+header{
+  position:sticky;top:0;z-index:20;background:var(--bg);
+  border-bottom:1px solid var(--line);
+}
+.bar{
+  max-width:820px;margin:0 auto;padding:14px 20px;
+  display:flex;align-items:center;gap:12px;
+}
+.mark{font-weight:800;letter-spacing:-.03em;font-size:20px;margin-right:auto}
+.mark span{color:var(--muted);font-weight:500}
+.icon{
+  height:40px;min-width:40px;padding:0 14px;border:none;border-radius:999px;
+  background:var(--surface-2);cursor:pointer;display:inline-flex;
+  align-items:center;justify-content:center;gap:8px;font-weight:500;font-size:14px;
+  transition:background var(--dur) var(--ease),transform var(--dur) var(--spring);
+}
+.icon:hover{background:var(--surface-3)}
+.icon:active{transform:scale(.94)}
+.icon[aria-expanded="true"]{background:var(--inv-bg);color:var(--inv-text)}
+.dot{width:8px;height:8px;border-radius:999px;background:var(--muted)}
+.dot.on{background:currentColor}
+
+/* ---------- setup panel ---------- */
+.panel{
+  overflow:hidden;max-height:0;transition:max-height .32s var(--ease);
+  border-bottom:1px solid transparent;
+}
+.panel.open{max-height:640px;border-bottom-color:var(--line)}
+.panel-in{max-width:820px;margin:0 auto;padding:6px 20px 22px}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:8px 0 12px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{
+  border:1px solid var(--line);background:transparent;border-radius:999px;
+  padding:9px 16px;white-space:nowrap;cursor:pointer;font-size:14px;font-weight:500;
+  transition:background var(--dur) var(--ease),color var(--dur) var(--ease),
+             border-color var(--dur) var(--ease),transform var(--dur) var(--spring);
+}
+.chip:hover{background:var(--surface-2)}
+.chip:active{transform:scale(.95)}
+.chip[aria-pressed="true"]{background:var(--inv-bg);color:var(--inv-text);border-color:var(--inv-bg)}
+.field{margin-top:12px}
+.field label{display:block;font-size:13px;color:var(--muted);margin:0 0 6px 4px}
+.field input,.field textarea{
+  width:100%;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r-sm);padding:13px 16px;resize:none;
+  transition:border-color var(--dur) var(--ease),background var(--dur) var(--ease);
+}
+.field input:focus,.field textarea:focus{outline:none;border-color:var(--text);background:var(--surface-2)}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.row>*{flex:1 1 220px}
+.hint{font-size:13px;color:var(--muted);margin:14px 4px 0}
+.field input[type=file]{padding:10px 12px;cursor:pointer}
+.field input[type=file]::file-selector-button{
+  border:none;border-radius:999px;padding:8px 16px;margin-right:12px;cursor:pointer;
+  background:var(--inv-bg);color:var(--inv-text);font-weight:500;
+}
+#localState{margin:10px 4px 0;font-size:13px;color:var(--muted)}
+.vault-head{display:flex;align-items:center;gap:8px;padding:4px 0 14px;font-size:13px;color:var(--muted)}
+.files{display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto}
+.file{
+  display:flex;align-items:center;gap:12px;padding:12px 14px;
+  background:var(--surface);border-radius:var(--r-sm);
+}
+.file b{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file .path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--muted)}
+.file .grow{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.file button{
+  background:none;border:none;padding:6px 10px;border-radius:999px;cursor:pointer;
+  font-size:13px;color:var(--muted);transition:background var(--dur) var(--ease),color var(--dur) var(--ease);
+}
+.file button:hover{background:var(--surface-3);color:var(--text)}
+.empty{color:var(--muted);font-size:13px;padding:4px}
+.actions{display:flex;gap:8px;margin-top:14px}
+.bar-progress{height:3px;border-radius:999px;background:var(--surface-3);margin:10px 4px 0;overflow:hidden}
+.bar-progress i{display:block;height:100%;background:var(--text);width:0;transition:width .2s var(--ease)}
+.hint a{color:var(--text)}
+
+/* ---------- messages ---------- */
+main{flex:1;overflow-y:auto;scroll-behavior:smooth}
+.thread{max-width:820px;margin:0 auto;padding:28px 20px 8px;display:flex;flex-direction:column;gap:14px}
+.msg{max-width:min(86%,640px);padding:14px 18px;border-radius:var(--r-md);animation:in .3s var(--spring) both}
+@keyframes in{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+.msg.user{align-self:flex-end;background:var(--inv-bg);color:var(--inv-text);border-bottom-right-radius:var(--r-xs)}
+.msg.bot{align-self:flex-start;background:var(--surface);border-bottom-left-radius:var(--r-xs)}
+.msg.err{align-self:flex-start;background:transparent;border:1px solid var(--line);color:var(--muted)}
+.msg p{margin:0 0 10px}
+.msg p:last-child{margin:0}
+.msg pre{
+  background:var(--surface-2);border-radius:var(--r-xs);padding:14px 16px;
+  overflow-x:auto;margin:10px 0;font-size:14px;
+}
+.msg code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em}
+.msg :not(pre)>code{background:var(--surface-2);padding:2px 6px;border-radius:8px}
+.msg.user :not(pre)>code,.msg.user pre{background:rgba(128,128,128,.28)}
+.caret{display:inline-block;width:9px;height:1.05em;background:currentColor;border-radius:2px;vertical-align:-2px;animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* hero */
+.hero{margin:auto;padding:12vh 20px;text-align:center;max-width:520px}
+.hero h1{font-size:clamp(38px,8vw,64px);line-height:1.02;letter-spacing:-.045em;font-weight:800;margin:0 0 14px}
+.hero p{color:var(--muted);margin:0}
+
+/* ---------- composer ---------- */
+footer{position:sticky;bottom:0;background:var(--bg);padding:10px 20px 20px}
+.composer{
+  max-width:820px;margin:0 auto;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r-lg);padding:8px 8px 8px 20px;display:flex;align-items:flex-end;gap:10px;
+  transition:border-color var(--dur) var(--ease),box-shadow var(--dur) var(--ease);
+}
+.composer:focus-within{border-color:var(--text);box-shadow:var(--shadow)}
+.composer textarea{
+  flex:1;background:none;border:none;outline:none;padding:14px 0;
+  max-height:190px;min-height:24px;resize:none;line-height:1.5;
+}
+.composer textarea::placeholder{color:var(--muted)}
+.send{
+  width:48px;height:48px;flex:none;border:none;border-radius:var(--r-sm);
+  background:var(--inv-bg);color:var(--inv-text);cursor:pointer;
+  display:grid;place-items:center;
+  transition:border-radius var(--dur) var(--spring),transform var(--dur) var(--spring),opacity var(--dur) var(--ease);
+}
+.send:hover{border-radius:14px}
+.send:active{transform:scale(.9)}
+.send:disabled{opacity:.35;cursor:not-allowed}
+.send svg{width:22px;height:22px;fill:currentColor}
+.meta{max-width:820px;margin:10px auto 0;font-size:12.5px;color:var(--muted);display:flex;gap:10px;align-items:center}
+.meta button{background:none;border:none;padding:0;color:var(--muted);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.meta button:hover{color:var(--text)}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition-duration:.01ms!important}}
+@media (max-width:560px){.bar{padding:12px 16px}.thread{padding:20px 16px 8px}footer{padding:8px 16px 16px}.msg{max-width:92%}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <div class="mark">Chat<span>.</span></div>
+    <button class="icon" id="themeBtn" title="Switch theme" aria-label="Switch theme">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 100 20V2z"/><path d="M12 2a10 10 0 010 20" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+    </button>
+    <button class="icon" id="vaultBtn" aria-expanded="false" aria-controls="vaultPanel">
+      <span class="dot" id="vaultDot"></span> Vault
+    </button>
+    <button class="icon" id="setupBtn" aria-expanded="false" aria-controls="setup">
+      <span class="dot" id="keyDot"></span> Connection
+    </button>
+  </div>
+</header>
+
+<div class="panel" id="setup">
+  <div class="panel-in">
+    <div class="chips" id="chips" role="group" aria-label="Provider"></div>
+    <div class="row" id="remoteBox">
+      <div class="field">
+        <label for="key">API key</label>
+        <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="paste key">
+      </div>
+      <div class="field">
+        <label for="model">Model</label>
+        <input id="model" type="text" autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <div class="field" id="localBox" hidden>
+      <label for="gguf">Model file (.gguf — pick every shard if the model is split)</label>
+      <input id="gguf" type="file" accept=".gguf" multiple>
+      <div class="bar-progress" id="localBar" hidden><i></i></div>
+      <p id="localState">No model loaded. Runs on CPU in this tab — start with a small quantized model, under ~1.5 GB.</p>
+    </div>
+
+    <div class="field">
+      <label for="sys">System prompt</label>
+      <textarea id="sys" rows="2" placeholder="optional"></textarea>
+    </div>
+    <p class="hint" id="remoteHint">Keys live in this tab only and go nowhere but the provider. Unlock the vault to keep them across reloads.</p>
+  </div>
+</div>
+
+<div class="panel" id="vaultPanel">
+  <div class="panel-in">
+    <div id="vaultLocked">
+      <div class="field">
+        <label for="pass">Passphrase</label>
+        <input id="pass" type="password" autocomplete="current-password" spellcheck="false">
+      </div>
+      <div class="actions">
+        <button class="icon" id="unlockBtn">Unlock</button>
+      </div>
+      <p class="hint" id="vaultHint"></p>
+    </div>
+
+    <div id="vaultOpen" hidden>
+      <div class="vault-head">
+        <span id="vaultCount"></span>
+        <span style="flex:1"></span>
+        <button class="icon" id="saveChatBtn">Save this chat</button>
+        <button class="icon" id="lockBtn">Lock</button>
+      </div>
+      <div class="files" id="fileList"></div>
+      <p class="hint">AES-256-GCM, key derived from your passphrase with 600k rounds of PBKDF2. Stored in this browser only — nothing recoverable if you forget it.
+        <button id="forgetBtn" style="background:none;border:none;padding:0;color:var(--text);text-decoration:underline;text-underline-offset:3px;cursor:pointer">Delete vault</button>
+      </p>
+    </div>
+  </div>
+</div>
+
+<main id="main">
+  <div class="hero" id="hero">
+    <h1>Pick a provider, paste a key, talk.</h1>
+    <p>Anthropic, OpenAI, Gemini, xAI, Mistral, DeepSeek, Groq, OpenRouter — or a .gguf file straight off your disk.</p>
+  </div>
+  <div class="thread" id="thread" aria-live="polite"></div>
+</main>
+
+<footer>
+  <div class="composer">
+    <textarea id="input" rows="1" placeholder="Message" aria-label="Message"></textarea>
+    <button class="send" id="send" aria-label="Send message">
+      <svg viewBox="0 0 24 24"><path d="M4 20.5v-6l9-2.5-9-2.5v-6L21 12z"/></svg>
+    </button>
+  </div>
+  <div class="meta">
+    <span id="status">Not connected</span>
+    <button id="clear" type="button">Clear chat</button>
+  </div>
+</footer>
+
+<script>
+const PROVIDERS = {
+  anthropic:{
+    name:"Anthropic", model:"claude-sonnet-4-5", format:"anthropic",
+    url:"https://api.anthropic.com/v1/messages",
+    headers:k=>({"content-type":"application/json","x-api-key":k,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"})
+  },
+  openai:{
+    name:"OpenAI", model:"gpt-4o", format:"openai",
+    url:"https://api.openai.com/v1/chat/completions",
+    headers:k=>({"content-type":"application/json",authorization:"Bearer "+k})
+  },
+  google:{
+    name:"Google Gemini", model:"gemini-2.0-flash", format:"gemini",
+    url:(m,stream)=>`https://generativelanguage.googleapis.com/v1beta/models/${m}:`
+      + (stream ? "streamGenerateContent?alt=sse" : "generateContent"),
+    headers:k=>({"content-type":"application/json","x-goog-api-key":k})
+  },
+  xai:{
+    name:"xAI", model:"grok-3", format:"openai",
+    url:"https://api.x.ai/v1/chat/completions",
+    headers:k=>({"content-type":"application/json",authorization:"Bearer "+k})
+  },
+  mistral:{
+    name:"Mistral", model:"mistral-large-latest", format:"openai",
+    url:"https://api.mistral.ai/v1/chat/completions",
+    headers:k=>({"content-type":"application/json",authorization:"Bearer "+k})
+  },
+  deepseek:{
+    name:"DeepSeek", model:"deepseek-chat", format:"openai",
+    url:"https://api.deepseek.com/v1/chat/completions",
+    headers:k=>({"content-type":"application/json",authorization:"Bearer "+k})
+  },
+  groq:{
+    name:"Groq", model:"llama-3.3-70b-versatile", format:"openai",
+    url:"https://api.groq.com/openai/v1/chat/completions",
+    headers:k=>({"content-type":"application/json",authorization:"Bearer "+k})
+  },
+  openrouter:{
+    name:"OpenRouter", model:"openai/gpt-4o", format:"openai",
+    url:"https://openrouter.ai/api/v1/chat/completions",
+    headers:k=>({"content-type":"application/json",authorization:"Bearer "+k})
+  },
+  gguf:{
+    name:"Local GGUF", model:"", format:"gguf", local:true
+  }
+};
+
+const WLLAMA = "https://cdn.jsdelivr.net/npm/@wllama/wllama@3.6.1/esm/index.js";
+const WLLAMA_WASM = "https://cdn.jsdelivr.net/npm/@wllama/wllama@3.6.1/esm/wasm/wllama.wasm";
+
+const $ = s => document.querySelector(s);
+const keys = {};               // provider -> key, memory only
+let current = "anthropic";
+let history = [];
+let busy = false, aborted = false, activeReader = null, activeAbort = null;
+let llama = null, llamaName = "";
+
+/* provider chips */
+const chips = $("#chips");
+for (const [id,p] of Object.entries(PROVIDERS)) {
+  const b = document.createElement("button");
+  b.className = "chip"; b.type = "button"; b.textContent = p.name;
+  b.setAttribute("aria-pressed", id === current);
+  b.onclick = () => selectProvider(id);
+  b.dataset.id = id;
+  chips.append(b);
+}
+function selectProvider(id){
+  if (!PROVIDERS[current].local) keys[current] = $("#key").value.trim();
+  current = id;
+  const p = PROVIDERS[id];
+  chips.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", c.dataset.id === id));
+  $("#remoteBox").hidden = !!p.local;
+  $("#remoteHint").hidden = !!p.local;
+  $("#localBox").hidden = !p.local;
+  if (!p.local){
+    $("#key").value = keys[id] || "";
+    $("#model").value = p.model;
+    $("#key").placeholder = "paste " + p.name + " key";
+  }
+  updateStatus();
+}
+$("#key").addEventListener("input", () => {
+  keys[current] = $("#key").value.trim();
+  if (unlocked()){
+    if (keys[current]) fs.write("/keys/" + current, keys[current]);
+    else fs.rm("/keys/" + current);
+  }
+  updateStatus();
+});
+function updateStatus(){
+  const p = PROVIDERS[current];
+  const ok = p.local ? !!llama : !!$("#key").value.trim();
+  $("#keyDot").classList.toggle("on", ok);
+  $("#status").textContent = !ok
+    ? (p.local ? "No model loaded" : "Not connected")
+    : p.name + " · " + (p.local ? llamaName : ($("#model").value.trim() || p.model));
+}
+$("#model").addEventListener("input", updateStatus);
+
+/* local gguf */
+function localState(msg){ $("#localState").textContent = msg; }
+function localProgress(pct){
+  const bar = $("#localBar");
+  bar.hidden = pct == null;
+  if (pct != null) bar.firstElementChild.style.width = Math.round(pct) + "%";
+}
+
+let wasmUrl = null, hasTemplate = true;
+
+function memory64(){
+  try { new WebAssembly.Memory({initial:1, maximum:1, index:"i64"}); return true; }
+  catch { return false; }
+}
+const isFile = location.protocol === "file:";
+
+function preflight(){
+  if (!memory64())
+    return "This browser has no WASM Memory64, which the llama.cpp build requires. Chrome 133+ or Firefox 134+; Safari won't work.";
+  return null;
+}
+
+async function fetchRuntime(onPct){
+  if (wasmUrl) return wasmUrl;
+  if (isFile) return (wasmUrl = WLLAMA_WASM);   // null origin: let wllama fetch it itself
+  const res = await fetch(WLLAMA_WASM);
+  if (!res.ok) throw new Error("Couldn't fetch the runtime (HTTP " + res.status + ")");
+  if (!res.body || !res.body.getReader) return (wasmUrl = WLLAMA_WASM);
+  const total = +res.headers.get("content-length") || 8.5e6;
+  const reader = res.body.getReader();
+  const chunks = []; let got = 0;
+  for (;;){
+    const {done, value} = await reader.read();
+    if (done) break;
+    chunks.push(value); got += value.length;
+    onPct(Math.min(99, got / total * 100));
+  }
+  return (wasmUrl = URL.createObjectURL(new Blob(chunks, {type:"application/wasm"})));
+}
+
+$("#gguf").addEventListener("change", async e => {
+  const files = [...e.target.files];
+  if (!files.length) return;
+
+  const blocked = preflight();
+  if (blocked){ localState(blocked); e.target.value = ""; return; }
+
+  const size = files.reduce((n,f) => n + f.size, 0) / 1e9;
+  e.target.disabled = true;
+  localProgress(0);
+
+  let ticker = null, onError = null;
+  const fail = msg => { localState(msg); console.error("[gguf]", msg); };
+
+  try {
+    onError = ev => fail("Runtime error: " + (ev.message || ev.reason?.message || ev.reason || ev));
+    addEventListener("error", onError);
+    addEventListener("unhandledrejection", onError);
+
+    localState("Fetching the llama.cpp runtime…");
+    const wasm = await fetchRuntime(pct => localProgress(pct));
+
+    localState("Starting the runtime…");
+    localProgress(100);
+    const { Wllama } = await import(WLLAMA);
+    if (llama){ try { await llama.exit(); } catch {} llama = null; updateStatus(); }
+
+    const w = new Wllama({ default: wasm }, { logger: console });
+
+    // loadModel gives no progress for local blobs, so show elapsed time instead
+    const t0 = Date.now();
+    const threads = crossOriginIsolated ? undefined : 1;
+    localProgress(null);
+    ticker = setInterval(() => {
+      const s = Math.round((Date.now() - t0) / 1000);
+      localState(`Loading ${files[0].name} (${size.toFixed(2)} GB) — ${s}s`
+        + (s > 45 ? ". Taking a while; check the console for worker errors." : ""));
+    }, 1000);
+    localState(`Loading ${files[0].name} (${size.toFixed(2)} GB) — 0s`);
+
+    await w.loadModel(files, { n_ctx: 2048, ...(threads && { n_threads: threads }) });
+
+    clearInterval(ticker); ticker = null;
+    llama = w;
+    llamaName = files[0].name.replace(/-\d{5}-of-\d{5}\.gguf$/, ".gguf");
+    const info = w.getLoadedContextInfo?.() || {};
+    hasTemplate = !!(info.metadata && info.metadata["tokenizer.chat_template"]);
+    console.log("[gguf] loaded", info);
+    localState(`Ready — ${llamaName}, ${Math.round((Date.now()-t0)/1000)}s to load`
+      + (crossOriginIsolated ? ", multi-threaded" : ", single-threaded")
+      + (hasTemplate ? "." : ". No chat template in this GGUF — falling back to a generic one, so replies may be rough. An -instruct/-it build is better."));
+  } catch (err) {
+    llama = null;
+    fail("Couldn't load that model: " + (err.message || err)
+      + (isFile ? " — opened from file://, where Chrome blocks the worker the runtime needs. Firefox is more permissive here; otherwise the page has to be served over http(s)." : ""));
+    console.error(err);
+  } finally {
+    clearInterval(ticker);
+    removeEventListener("error", onError);
+    removeEventListener("unhandledrejection", onError);
+    localProgress(null);
+    e.target.disabled = false;
+    updateStatus();
+  }
+});
+
+/* panel + theme */
+function togglePanel(panel, btn, focus){
+  const open = $(panel).classList.toggle("open");
+  $(btn).setAttribute("aria-expanded", open);
+  for (const [p,b] of [["#setup","#setupBtn"],["#vaultPanel","#vaultBtn"]]) {
+    if (p !== panel){ $(p).classList.remove("open"); $(b).setAttribute("aria-expanded", false); }
+  }
+  if (open && focus) $(focus).focus();
+}
+$("#setupBtn").onclick = () => togglePanel("#setup", "#setupBtn", "#key");
+$("#vaultBtn").onclick = () => togglePanel("#vaultPanel", "#vaultBtn", unlocked() ? null : "#pass");
+$("#themeBtn").onclick = () => {
+  const el = document.documentElement;
+  el.dataset.theme = el.dataset.theme === "dark" ? "light" : "dark";
+};
+
+/* ---------- mini vault fs ---------- */
+/* one encrypted blob in IndexedDB holding a tiny path-keyed filesystem:
+   /keys/<provider>   api keys
+   /chats/<id>.json   saved conversations                                   */
+
+const MAGIC = [0x4d,0x56,0x46,0x53,0x01];          // "MVFS" + version
+const DB = {name:"chat-vault", store:"vault", key:"blob"};
+let memBlob = null;                                 // fallback when IndexedDB is unavailable
+let storageOk = true;                               // false => vault lives only in this tab
+let vault = null, vaultKey = null, vaultSalt = null, chatId = null, saveTimer = null;
+
+function openDb(){
+  return new Promise((res,rej) => {
+    const r = indexedDB.open(DB.name, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(DB.store);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function blobRead(){
+  try {
+    const db = await openDb();
+    return await new Promise((res,rej) => {
+      const q = db.transaction(DB.store,"readonly").objectStore(DB.store).get(DB.key);
+      q.onsuccess = () => res(q.result || null);
+      q.onerror = () => rej(q.error);
+    });
+  } catch { storageOk = false; return memBlob; }
+}
+async function blobWrite(bytes){
+  memBlob = bytes;
+  try {
+    const db = await openDb();
+    await new Promise((res,rej) => {
+      const q = db.transaction(DB.store,"readwrite").objectStore(DB.store).put(bytes, DB.key);
+      q.onsuccess = res; q.onerror = () => rej(q.error);
+    });
+  } catch { storageOk = false; }
+}
+async function blobDelete(){
+  memBlob = null;
+  try {
+    const db = await openDb();
+    await new Promise(res => {
+      const q = db.transaction(DB.store,"readwrite").objectStore(DB.store).delete(DB.key);
+      q.onsuccess = res; q.onerror = res;
+    });
+  } catch {}
+}
+
+async function deriveKey(pass, salt){
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    {name:"PBKDF2", salt, iterations:600000, hash:"SHA-256"},
+    base, {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]
+  );
+}
+async function seal(){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt(
+    {name:"AES-GCM", iv}, vaultKey, new TextEncoder().encode(JSON.stringify(vault))));
+  const out = new Uint8Array(MAGIC.length + 16 + 12 + ct.length);
+  out.set(MAGIC, 0); out.set(vaultSalt, 5); out.set(iv, 21); out.set(ct, 33);
+  return out;
+}
+async function unseal(pass, bytes){
+  if (MAGIC.some((b,i) => bytes[i] !== b)) throw new Error("That isn't a vault file.");
+  const salt = bytes.slice(5,21), iv = bytes.slice(21,33), ct = bytes.slice(33);
+  const key = await deriveKey(pass, salt);
+  const plain = await crypto.subtle.decrypt({name:"AES-GCM", iv}, key, ct);
+  return {key, salt, data:JSON.parse(new TextDecoder().decode(plain))};
+}
+
+/* fs surface */
+const fs = {
+  ls:  dir => Object.keys(vault.files).filter(p => p.startsWith(dir)).sort(),
+  read: path => vault.files[path]?.data,
+  stat: path => vault.files[path],
+  write(path, data){ vault.files[path] = {mtime:Date.now(), data}; persist(); },
+  rm(path){ delete vault.files[path]; persist(); }
+};
+function persist(){
+  if (!vaultKey) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => blobWrite(await seal()), 250);
+}
+
+/* vault ui */
+const unlocked = () => !!vaultKey;
+
+async function initVault(){
+  const existing = await blobRead();
+  $("#vaultHint").textContent = existing
+    ? "Vault found. Enter your passphrase to unlock it."
+    : "No vault yet. Pick a passphrase and one will be created."
+      + (storageOk ? "" : " Note: this browser blocks persistent storage on file:// — the vault will only last as long as this tab.");
+  $("#unlockBtn").textContent = existing ? "Unlock" : "Create vault";
+  $("#pass").placeholder = existing ? "passphrase" : "choose a passphrase";
+}
+
+$("#unlockBtn").onclick = async () => {
+  const pass = $("#pass").value;
+  if (!pass) return void ($("#vaultHint").textContent = "Enter a passphrase.");
+  $("#unlockBtn").disabled = true;
+  $("#vaultHint").textContent = "Deriving key…";
+  try {
+    const existing = await blobRead();
+    if (existing) {
+      const {key, salt, data} = await unseal(pass, existing);
+      vaultKey = key; vaultSalt = salt; vault = data;
+    } else {
+      vaultSalt = crypto.getRandomValues(new Uint8Array(16));
+      vaultKey = await deriveKey(pass, vaultSalt);
+      vault = {files:{}};
+      await blobWrite(await seal());
+    }
+    $("#pass").value = "";
+    for (const path of fs.ls("/keys/")) keys[path.slice(6)] = fs.read(path);
+    if (!PROVIDERS[current].local) $("#key").value = keys[current] || "";
+    showVault(true);
+  } catch (err) {
+    $("#vaultHint").textContent = err.name === "OperationError"
+      ? "Wrong passphrase."
+      : "Couldn't open the vault: " + (err.message || err);
+  }
+  $("#unlockBtn").disabled = false;
+  updateStatus();
+};
+
+function showVault(open){
+  $("#vaultLocked").hidden = open;
+  $("#vaultOpen").hidden = !open;
+  $("#vaultDot").classList.toggle("on", open);
+  if (open) renderFiles(); else initVault();
+}
+
+function lockVault(){
+  vault = null; vaultKey = null; vaultSalt = null; chatId = null;
+  for (const k in keys) delete keys[k];
+  if (!PROVIDERS[current].local) $("#key").value = "";
+  showVault(false);
+  updateStatus();
+}
+$("#lockBtn").onclick = lockVault;
+
+$("#forgetBtn").onclick = async () => {
+  if (!confirm("Delete the vault and everything in it? This can't be undone.")) return;
+  await blobDelete();
+  lockVault();
+};
+
+function renderFiles(){
+  const paths = fs.ls("/chats/");
+  $("#vaultCount").textContent =
+    `${paths.length} chat${paths.length === 1 ? "" : "s"} · ${fs.ls("/keys/").length} keys`;
+  const list = $("#fileList");
+  list.innerHTML = "";
+  if (!paths.length){
+    list.innerHTML = '<p class="empty">Nothing saved yet. Chats land here as soon as you send one.</p>';
+    return;
+  }
+  for (const path of paths.reverse()){
+    const c = fs.read(path);
+    const row = document.createElement("div");
+    row.className = "file";
+    row.innerHTML =
+      '<div class="grow"><b></b><span class="path"></span></div>' +
+      '<button class="open">Open</button><button class="del">Delete</button>';
+    row.querySelector("b").textContent = c.title;
+    row.querySelector(".path").textContent =
+      path + " · " + new Date(c.at).toLocaleString();
+    row.querySelector(".open").onclick = () => loadChat(path);
+    row.querySelector(".del").onclick = () => { fs.rm(path); renderFiles(); };
+    list.append(row);
+  }
+}
+
+function saveChat(){
+  if (!unlocked() || !history.length) return;
+  chatId = chatId || "/chats/" + Date.now().toString(36) + ".json";
+  const first = history.find(m => m.role === "user");
+  fs.write(chatId, {
+    title:(first ? first.content : "Untitled").slice(0,60),
+    provider:current,
+    model:$("#model").value.trim(),
+    at:Date.now(),
+    messages:history
+  });
+  renderFiles();
+}
+$("#saveChatBtn").onclick = saveChat;
+
+function loadChat(path){
+  const c = fs.read(path);
+  chatId = path;
+  history = c.messages.map(m => ({...m}));
+  $("#thread").innerHTML = "";
+  $("#hero").style.display = "none";
+  for (const m of history) bubble(m.role === "user" ? "user" : "bot", m.content);
+  if (PROVIDERS[c.provider]) selectProvider(c.provider);
+  if (c.model && !PROVIDERS[current].local) $("#model").value = c.model;
+  $("#vaultPanel").classList.remove("open");
+  $("#vaultBtn").setAttribute("aria-expanded", false);
+  updateStatus();
+}
+
+initVault();
+
+/* composer */
+const input = $("#input");
+input.addEventListener("input", () => {
+  input.style.height = "auto";
+  input.style.height = Math.min(input.scrollHeight, 190) + "px";
+});
+input.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+});
+$("#send").onclick = () => busy ? stop() : send();
+$("#clear").onclick = () => {
+  history = []; chatId = null;
+  $("#thread").innerHTML = ""; $("#hero").style.display = "";
+};
+
+/* rendering */
+function escapeHtml(s){
+  return s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+}
+function render(text){
+  const parts = escapeHtml(text).split(/```/);
+  return parts.map((chunk,i) => {
+    if (i % 2) return "<pre><code>" + chunk.replace(/^[a-z]*\n/i,"") + "</code></pre>";
+    return chunk.split(/\n{2,}/).filter(Boolean).map(par =>
+      "<p>" + par
+        .replace(/`([^`\n]+)`/g,"<code>$1</code>")
+        .replace(/\*\*([^*\n]+)\*\*/g,"<strong>$1</strong>")
+        .replace(/\n/g,"<br>") + "</p>"
+    ).join("");
+  }).join("");
+}
+function bubble(kind, text){
+  $("#hero").style.display = "none";
+  const el = document.createElement("div");
+  el.className = "msg " + kind;
+  el.innerHTML = render(text);
+  $("#thread").append(el);
+  scroll();
+  return el;
+}
+function scroll(){ $("#main").scrollTop = $("#main").scrollHeight; }
+
+/* ChatML fallback for GGUFs whose template is missing or broken */
+async function rawCompletion(messages){
+  const prompt = messages.map(m => `<|im_start|>${m.role}\n${m.content}<|im_end|>\n`).join("")
+    + "<|im_start|>assistant\n";
+  let out = "";
+  await llama.createCompletion({
+    prompt,
+    max_tokens:1024,
+    stream:true,
+    stop:["<|im_end|>", "<|im_start|>"],
+    abortSignal:activeAbort?.signal,
+    onData:chunk => { out += chunk.choices?.[0]?.text || ""; }
+  });
+  return out.trim();
+}
+
+/* send */
+function setBusy(v){
+  busy = v;
+  $("#send").innerHTML = v
+    ? '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="3"/></svg>'
+    : '<svg viewBox="0 0 24 24"><path d="M4 20.5v-6l9-2.5-9-2.5v-6L21 12z"/></svg>';
+  $("#send").setAttribute("aria-label", v ? "Stop generating" : "Send message");
+}
+function stop(){
+  aborted = true;
+  activeReader && activeReader.cancel().catch(()=>{});
+  activeAbort && activeAbort.abort();
+}
+
+async function send(){
+  const text = input.value.trim();
+  if (!text || busy) return;
+  const prov = PROVIDERS[current];
+  const key = prov.local ? "" : $("#key").value.trim();
+  if (prov.local ? !llama : !key){
+    $("#setup").classList.add("open");
+    $("#setupBtn").setAttribute("aria-expanded", true);
+    (prov.local ? $("#gguf") : $("#key")).focus();
+    bubble("err", prov.local
+      ? "Pick a .gguf file in Connection to load a model."
+      : "Add a " + prov.name + " API key to start.");
+    return;
+  }
+
+  input.value = ""; input.style.height = "auto";
+  bubble("user", text);
+  history.push({role:"user", content:text});
+
+  const out = bubble("bot", "");
+  out.innerHTML = '<span class="caret"></span>';
+  setBusy(true);
+  aborted = false;
+
+  const p = PROVIDERS[current];
+  const model = $("#model").value.trim() || p.model;
+  const sys = $("#sys").value.trim();
+  let acc = "";
+
+  const paint = () => { out.innerHTML = render(acc) + '<span class="caret"></span>'; scroll(); };
+
+  try {
+    if (p.local) {
+      activeAbort = new AbortController();
+      const messages = [...(sys ? [{role:"system", content:sys}] : []), ...history];
+      const opts = {messages, max_tokens:1024, abortSignal:activeAbort.signal};
+
+      if (hasTemplate) {
+        try {
+          await llama.createChatCompletion({...opts, stream:true,
+            onData:chunk => {
+              const piece = chunk.choices?.[0]?.delta?.content;
+              if (piece){ acc += piece; paint(); }
+            }
+          });
+        } catch (e) {
+          if (aborted) throw e;
+          console.warn("[gguf] streaming chat completion failed:", e);
+        }
+        if (!acc && !aborted) {          // streamed nothing — ask for it in one shot
+          const full = await llama.createChatCompletion({...opts, stream:false});
+          console.warn("[gguf] non-streamed result:", full);
+          acc = full?.choices?.[0]?.message?.content || "";
+          if (acc) paint();
+        }
+      }
+      if (!acc && !aborted) {            // no template, or the template produced nothing
+        acc = await rawCompletion(messages);
+        if (acc) paint();
+      }
+    } else {
+      const res = await callApi(p, key, model, sys, true);
+      if (!res.ok) throw new Error(await readError(res));
+
+      if (res.body && res.body.getReader) {
+        for await (const data of sse(res)) {
+          const piece = extract(p.format, data);
+          if (piece){ acc += piece; paint(); }
+        }
+      } else {
+        acc = parseWhole(p.format, await res.text());
+        if (acc) paint();
+      }
+
+      // some providers and proxies quietly ignore stream:true
+      if (!acc && !aborted) {
+        const plain = await callApi(p, key, model, sys, false);
+        if (!plain.ok) throw new Error(await readError(plain));
+        acc = parseWhole(p.format, await plain.text());
+        if (acc) paint();
+      }
+    }
+    out.innerHTML = render(acc) ||
+      '<p>The provider returned no text. Open the console — the raw response is logged there.</p>';
+    if (!acc) console.warn("[chat] empty response from", current, model);
+    history.push({role:"assistant", content:acc});
+    saveChat();
+  } catch (err) {
+    out.remove();
+    if (aborted) {
+      if (acc){ bubble("bot", acc); history.push({role:"assistant", content:acc}); }
+      else history.pop();
+    } else {
+      bubble("err", err.message || "Request failed.");
+      history.pop();
+    }
+  } finally {
+    setBusy(false); activeReader = null; activeAbort = null;
+  }
+}
+
+function buildBody(format, model, sys, stream){
+  if (format === "anthropic")
+    return {model, max_tokens:4096, stream, ...(sys && {system:sys}), messages:history};
+  if (format === "gemini")
+    return {
+      contents:history.map(m => ({role:m.role === "assistant" ? "model" : "user", parts:[{text:m.content}]})),
+      ...(sys && {systemInstruction:{parts:[{text:sys}]}})
+    };
+  return {model, stream, messages:[...(sys ? [{role:"system", content:sys}] : []), ...history]};
+}
+
+function callApi(p, key, model, sys, stream){
+  return fetch(typeof p.url === "function" ? p.url(model, stream) : p.url, {
+    method:"POST",
+    headers:p.headers(key),
+    body:JSON.stringify(buildBody(p.format, model, sys, stream))
+  });
+}
+
+/* parse a whole response body: SSE transcript first, plain JSON second */
+function parseWhole(format, text){
+  const lines = text.split("\n").map(l => l.trim()).filter(l => l.startsWith("data:"));
+  if (lines.length){
+    let out = "";
+    for (const l of lines) out += extract(format, l.slice(5).trim());
+    if (out) return out;
+  }
+  let j;
+  try { j = JSON.parse(text); } catch { return ""; }
+  if (j.error) throw new Error(j.error.message || JSON.stringify(j.error));
+  if (format === "anthropic") return (j.content || []).map(b => b.text || "").join("");
+  if (format === "gemini") return (j.candidates?.[0]?.content?.parts || []).map(x => x.text || "").join("");
+  const m = j.choices?.[0]?.message;
+  return m?.content || m?.reasoning_content || "";
+}
+
+function extract(format, data){
+  if (data === "[DONE]") return "";
+  let j; try { j = JSON.parse(data); } catch { return ""; }
+  if (j.error) throw new Error(j.error.message || JSON.stringify(j.error));
+  if (format === "anthropic")
+    return j.type === "content_block_delta" && j.delta?.text || "";
+  if (format === "gemini")
+    return j.candidates?.[0]?.content?.parts?.map(x => x.text || "").join("") || "";
+  return j.choices?.[0]?.delta?.content || "";
+}
+
+async function* sse(res){
+  if (!res.body || !res.body.getReader) {          // sandboxed/proxied fetch: no stream body
+    for (const line of (await res.text()).split("\n")) {
+      const t = line.trim();
+      if (t.startsWith("data:")) yield t.slice(5).trim();
+    }
+    return;
+  }
+  const reader = activeReader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const {done, value} = await reader.read();
+    if (done || aborted) break;
+    buf += dec.decode(value, {stream:true});
+    const lines = buf.split("\n");
+    buf = lines.pop();
+    for (const line of lines) {
+      const t = line.trim();
+      if (t.startsWith("data:")) yield t.slice(5).trim();
+    }
+  }
+}
+
+async function readError(res){
+  const raw = await res.text();
+  try {
+    const j = JSON.parse(raw);
+    return (j.error?.message || j.message || raw) + " (" + res.status + ")";
+  } catch { return (raw.slice(0,180) || res.statusText) + " (" + res.status + ")"; }
+}
+
+selectProvider(current);
+</script>
+</body>
+</html>
